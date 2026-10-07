@@ -90,13 +90,14 @@ func firstViewName(raw []byte) (string, error) {
 // Returns a container that echoes whatever string argument is provided
 func (m *ArchLensAction) Container() *dagger.Container {
 	return dag.Container().
-		From("alpine:latest").
-		WithExec([]string{"apk", "add", "--no-cache", "curl", "git", "python3"}).
-		WithExec([]string{"sh", "-c",
-			"curl -fsSL https://github.com/archlens/ArchLensGo/releases/latest/download/archlens-linux-amd64.tar.gz" +
-				" | tar xz && mv archlens /usr/local/bin/archlens && chmod  +x /usr/local/bin/archlens"}).
+		From("debian:bookworm").
+		WithExec([]string{"apt", "update"}).
+		WithExec([]string{"apt", "install", "curl", "git", "tar", "-y"}).
 		WithDirectory("/proj", m.Src).
 		WithWorkdir("/proj").
+		WithExec([]string{"sh", "-c",
+			"curl -fsSL https://github.com/archlens/ArchLensGo/releases/latest/download/archlens-linux-amd64.tar.gz | tar -xz"}).
+		// WithExec([]string{"sh", "-c", "tar -xvf ./archlens.tar.gz"}).
 		WithExec([]string{"git", "config", "--global", "--add", "safe.directory", "/proj"})
 	}
 
@@ -121,7 +122,7 @@ func (m *ArchLensAction) RenderDiff(ctx context.Context, baseRef, headRef string
 	}
 
 	ctr := m.Container().
-		WithExec([]string{"archlens", "renderDiff", baseRef, headRef})
+		WithExec([]string{"./archlens", "renderDiff", baseRef, headRef})
 
 	outPath := path.Join("/proj", cfg.SaveLocation, viewName+".md")
 	return ctr.File(outPath).Contents(ctx)	
