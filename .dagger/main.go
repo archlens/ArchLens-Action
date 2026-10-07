@@ -94,7 +94,7 @@ func (m *ArchLensAction) Container() *dagger.Container {
 		WithExec([]string{"apk", "add", "--no-cache", "curl", "git", "python3"}).
 		WithExec([]string{"sh", "-c",
 			"curl -fsSL https://github.com/archlens/ArchLensGo/releases/latest/download/archlens-linux-amd64.tar.gz" +
-				" | tar xz -C /usr/local/bin archlens && chmod +x /usr/local/bin/archlens"}).
+				" | tar xz && mv archlens /usr/local/bin/archlens && chmod  +x /usr/local/bin/archlens"}).
 		WithDirectory("/proj", m.Src).
 		WithWorkdir("/proj").
 		WithExec([]string{"git", "config", "--global", "--add", "safe.directory", "/proj"})
