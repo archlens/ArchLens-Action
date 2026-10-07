@@ -24,7 +24,7 @@ runs:
         BASE_REF: ${{ inputs.base-ref }}
         HEAD_REF: ${{ inputs.head-ref }}
       run: |
-        dagger call -m "${{ github.action_path }}/dagger" \
+        dagger call -m "${{ github.action_path }}/.dagger" \
           --src="$GITHUB_WORKSPACE" \
           render-diff --base-ref="$BASE_REF" --head-ref="$HEAD_REF" \
           > "$RUNNER_TEMP/archlens-diff.md"
