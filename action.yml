@@ -1,0 +1,37 @@
+name: 'My Dagger-Powered Marketplace Action'
+description: 'Runs a Dagger workflow under the hood'
+inputs:
+  github-token:
+    description: 'GitHub token (needs pull-requests: write to comment)'
+    required: true
+  base-ref:
+    description: 'Base commit'
+    default: ${{ github.event.pull_request.base.sha }}
+  head-ref:
+    description: 'Head commit'
+    default: ${{ github.event.pull_request.head.sha }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Dagger CLI
+      shell: bash
+      run: |
+        curl -L https://dl.dagger.io/dagger/install.sh | BIN_DIR=/usr/local/bin sh
+      shell: bash
+
+    - name: Render diff
+      shell: bash
+      env:
+        BASE_REF: ${{ inputs.base-ref }}
+        HEAD_REF: ${{ inputs.head-ref }}
+      run: |
+        dagger call -m "${{ github.action_path }}/dagger" \
+          --src="$GITHUB_WORKSPACE" \
+          render-diff --base-ref="$BASE_REF" --head-ref="$HEAD_REF" \
+          > "$RUNNER_TEMP/archlens-diff.md"
+    - name: Comment on PR
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      run: gh pr comment "$PR_NUMBER" --body-file "$RUNNER_TEMP/archlens-diff.md"
