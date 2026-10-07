@@ -92,7 +92,7 @@ func (m *ArchLensAction) Container() *dagger.Container {
 	return dag.Container().
 		From("debian:bookworm").
 		WithExec([]string{"apt", "update"}).
-		WithExec([]string{"apt", "install", "curl", "git", "tar", "-y"}).
+		WithExec([]string{"apt", "install", "curl", "git", "tar", "golang-go", "-y"}).
 		WithDirectory("/proj", m.Src).
 		WithWorkdir("/proj").
 		WithExec([]string{"sh", "-c",
