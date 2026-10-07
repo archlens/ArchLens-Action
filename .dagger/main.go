@@ -122,8 +122,8 @@ func (m *ArchLensAction) RenderDiff(ctx context.Context, baseRef, headRef string
 	}
 
 	ctr := m.Container().
-		WithExec([]string{"./archlens", "renderDiff", baseRef, headRef})
+		WithExec([]string{"./archlens", "renderDiff", baseRef, headRef, "--markdown"})
 
-	outPath := path.Join("/proj", cfg.SaveLocation, viewName+".md")
-	return ctr.File(outPath).Contents(ctx)	
+	outPath := path.Join("/proj", cfg.SaveLocation, viewName+"_diff.md")
+	return ctr.File(outPath).Contents(ctx)
 }
