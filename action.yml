@@ -1,5 +1,5 @@
-name: 'My Dagger-Powered Marketplace Action'
-description: 'Runs a Dagger workflow under the hood'
+name: 'archlens-action'
+description: 'runs archlens rederDiff on pull-requests and outputs diagram as a comment on the PR'
 inputs:
   github-token:
     description: 'GitHub token (needs pull-requests: write to comment)'
