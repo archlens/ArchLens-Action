@@ -50,6 +50,10 @@ type Input struct {
 	RunCommand 	 string 		 `json:"runCommand"`
 }
 
+// diffCacheDir is where renderDiff keeps its per-commit parse caches. ArchLens picks
+// this location itself (next to archlens.json); the constant is only used to export it.
+const diffCacheDir = "/proj/.archlens/diff-cache"
+
 // firstViewName returns the first key of the "views" object in declaration order.
 func firstViewName(raw []byte) (string, error) {
 	dec := json.NewDecoder(bytes.NewReader(raw))
@@ -90,40 +94,40 @@ func firstViewName(raw []byte) (string, error) {
 // Returns a container that echoes whatever string argument is provided
 func (m *ArchLensAction) Container() *dagger.Container {
 	return dag.Container().
-		From("debian:bookworm").
-		WithExec([]string{"apt", "update"}).
-		WithExec([]string{"apt", "install", "curl", "git", "tar", "golang-go", "-y"}).
+		From("golang:1.27-bookworm").
 		WithDirectory("/proj", m.Src).
 		WithWorkdir("/proj").
 		WithExec([]string{"sh", "-c",
 			"curl -fsSL https://github.com/archlens/ArchLensGo/releases/latest/download/archlens-linux-amd64.tar.gz | tar -xz"}).
-		// WithExec([]string{"sh", "-c", "tar -xvf ./archlens.tar.gz"}).
 		WithExec([]string{"git", "config", "--global", "--add", "safe.directory", "/proj"})
 	}
 
 
-func (m *ArchLensAction) RenderDiff(ctx context.Context, baseRef, headRef string) (string, error) {
+func (m *ArchLensAction) RenderDiff(ctx context.Context, baseRef, headRef string) (*dagger.Directory, error) {
 	raw, err := m.Src.File("archlens.json").Contents(ctx)
 	if err != nil {
-		return "", fmt.Errorf("archlens.json not found in the repository root: %w", err)
+		return nil, fmt.Errorf("archlens.json not found in the repository root: %w", err)
 	}
 
 	var cfg Input
 	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
-		return "", fmt.Errorf("parsing archlens.json: %w", err)
+		return nil, fmt.Errorf("parsing archlens.json: %w", err)
 	}
 	if cfg.SaveLocation == "" {
-		return "", fmt.Errorf("archlens.json has no saveLocation")
+		return nil, fmt.Errorf("archlens.json has no saveLocation")
 	}
 
 	viewName, err := firstViewName([]byte(raw))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	ctr := m.Container().
+		WithExec([]string{"mkdir", "-p", diffCacheDir}).
 		WithExec([]string{"./archlens", "renderDiff", baseRef, headRef, "--markdown"})
 
 	outPath := path.Join("/proj", cfg.SaveLocation, viewName+"_diff.md")
-	return ctr.File(outPath).Contents(ctx)
+	return dag.Directory().
+		WithFile("diff.md", ctr.File(outPath)).
+		WithDirectory("cache", ctr.Directory(diffCacheDir)), nil
 }
