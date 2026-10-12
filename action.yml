@@ -18,6 +18,15 @@ runs:
       run: |
         curl -L https://dl.dagger.io/dagger/install.sh | BIN_DIR=/usr/local/bin sh
 
+    - name: Restore ArchLens cache
+      id: cache
+      uses: actions/cache/restore@v4
+      with:
+        path: .archlens/diff-cache
+        key: archlens-${{ inputs.head-ref }}
+        restore-keys: |
+          archlens-
+
     - name: Render diff
       shell: bash
       env:
@@ -27,10 +36,28 @@ runs:
         dagger call -m "${{ github.action_path }}/.dagger" \
           --src="$GITHUB_WORKSPACE" \
           render-diff --base-ref="$BASE_REF" --head-ref="$HEAD_REF" \
-          > "$RUNNER_TEMP/archlens-diff.md"
+          --archlens-version="$ARCHLENS_VERSION" \
+          export --path="$RUNNER_TEMP/out"
+
+        # Dagger ran in a container, so copy the updated caches back to the
+        # workspace where the save step can see them.
+        mkdir -p .archlens/diff-cache
+        cp -r "$RUNNER_TEMP/out/cache/." .archlens/diff-cache/
+
+    - name: Save ArchLens cache
+      if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: .archlens/diff-cache
+        key: archlens-${{ inputs.head-ref }}
+
     - name: Comment on PR
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
       run: gh pr comment "$PR_NUMBER" --body-file "$RUNNER_TEMP/archlens-diff.md"
+
+branding:
+  icon: 'activity'
+  color: 'purple'
