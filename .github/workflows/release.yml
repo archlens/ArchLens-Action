@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Tag must be on main
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME is not on main"
+            exit 1
+          fi
+
+      - name: Action files are present
+        run: |
+          test -f action.yml
+          test -f dagger.json
+
+      - name: Install Dagger CLI
+        run: |
+          # Use the same engine version the module declares, so CI matches what users get
+          version=$(jq -r '.engineVersion' dagger.json | sed 's/^v//')
+          curl -fsSL https://dl.dagger.io/dagger/install.sh | BIN_DIR=/usr/local/bin DAGGER_VERSION="$version" sh
+
+      - name: Dagger module loads
+        run: dagger functions -m .dagger
+
+  release:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create the release and move the major tag
+    steps:
+      - uses: actions/checkout@v4
+      - name: Auto Changelog
+        uses: ardalanamini/auto-changelog@v4.0.1
+        id  : changelog
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          commit-types: |
+              feat: New Features
+              fix: Bug Fixes
+              build: Build System & Dependencies
+              perf: Performance Improvements
+              docs: Documentation
+              test: Tests
+              refactor: Refactors
+              chore: Chores
+              ci: CI
+              cd: CD
+              ci/cd: CI/CD
+              style: Code Style
+              revert: Reverts
+ 
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANGELOG: ${{ steps.changelog.outputs.changelog }}
+        run: |
+          printf '%s\n' "$CHANGELOG" > "$RUNNER_TEMP/notes.md"
+          flags=(--notes-file "$RUNNER_TEMP/notes.md" --verify-tag --title "$GITHUB_REF_NAME")
+          case "$GITHUB_REF_NAME" in
+            *-*) flags+=(--prerelease) ;;
+          esac
+          gh release create "$GITHUB_REF_NAME" "${flags[@]}"
+
+      - name: Move major tag (stable releases only)
+        if: ${{ !contains(github.ref_name, '-') }}
+        run: |
+          major="${GITHUB_REF_NAME%%.*}"     # v0.2.0 -> v0
+          git tag -f "$major" "$GITHUB_SHA"
+          git push -f origin "refs/tags/$major"
