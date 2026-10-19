@@ -10,9 +10,35 @@ inputs:
   head-ref:
     description: 'Head commit'
     default: ${{ github.event.pull_request.head.sha }}
+  archlens-version:
+    description: 'ArchLens release tag to install (e.g. v0.2.0), or "latest"'
+    default: 'latest'
+  warm-cache:
+    description: 'Only warm the parse cache (run this on pushes to your default branch). Nothing is posted.'
+    default: 'false'
 runs:
   using: 'composite'
   steps:
+    - name: Resolve refs
+      id: refs
+      shell: bash
+      env:
+        WARM: ${{ inputs.warm-cache }}
+        BASE: ${{ inputs.base-ref }}
+        HEAD: ${{ inputs.head-ref }}
+      run: |
+        if [ "$WARM" = "true" ]; then
+          # Warm mode: the pushed commit and its first parent
+          HEAD="${HEAD:-$GITHUB_SHA}"
+          BASE=$(git rev-parse --verify --quiet "$HEAD~1" || echo "$HEAD")
+        fi
+        if [ -z "$BASE" ] || [ -z "$HEAD" ]; then
+          echo "::error::base-ref and head-ref are empty. Run on pull_request events, or pass them explicitly."
+          exit 1
+        fi
+        echo "base=$BASE" >> "$GITHUB_OUTPUT"
+        echo "head=$HEAD" >> "$GITHUB_OUTPUT"
+
     - name: Install Dagger CLI
       shell: bash
       run: |
@@ -23,15 +49,18 @@ runs:
       uses: actions/cache/restore@v4
       with:
         path: .archlens/diff-cache
-        key: archlens-${{ inputs.head-ref }}
+        key: archlens-${{ steps.refs.outputs.head }}
         restore-keys: |
           archlens-
 
+    # In warm mode an exact hit means this commit is already cached, so skip the work
     - name: Render diff
+      if: inputs.warm-cache != 'true' || steps.cache.outputs.cache-hit != 'true'
       shell: bash
       env:
-        BASE_REF: ${{ inputs.base-ref }}
-        HEAD_REF: ${{ inputs.head-ref }}
+        BASE_REF: ${{ steps.refs.outputs.base }}
+        HEAD_REF: ${{ steps.refs.outputs.head }}
+        ARCHLENS_VERSION: ${{ inputs.archlens-version }}
       run: |
         dagger call -m "${{ github.action_path }}/.dagger" \
           --src="$GITHUB_WORKSPACE" \
@@ -49,14 +78,15 @@ runs:
       uses: actions/cache/save@v4
       with:
         path: .archlens/diff-cache
-        key: archlens-${{ inputs.head-ref }}
+        key: archlens-${{ steps.refs.outputs.head }}
 
     - name: Comment on PR
+      if: inputs.warm-cache != 'true'
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
-      run: gh pr comment "$PR_NUMBER" --body-file "$RUNNER_TEMP/archlens-diff.md"
+      run: gh pr comment "$PR_NUMBER" --body-file "$RUNNER_TEMP/out/diff.md"
 
 branding:
   icon: 'activity'
