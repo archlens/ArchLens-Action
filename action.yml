@@ -14,8 +14,11 @@ inputs:
     description: 'Only warm the parse cache (run this on pushes to your default branch). Nothing is posted.'
     default: 'false'
   ast-language-image:
-    description: 'Sets the language of the ast-parser the project uses, this is done using a docker image with the language needed installed'
+    description: 'Sets the language of the ast-parser the project uses, this is done using a docker image with the language needed installed. The image needs git, curl and tar'
     default: 'golang:1.27-bookworm'
+  package-install: 
+    description: 'Installs extra missing packages to the image'
+    default: ''
 
 runs:
   using: 'composite'
@@ -61,11 +64,13 @@ runs:
       env:
         BASE_REF: ${{ steps.refs.outputs.base   }}
         HEAD_REF: ${{ steps.refs.outputs.head   }}
-        IMAGE: ${{ inputs.ast-language-image }}
+        IMAGE: ${{ inputs.ast-language-image    }}
+        PACKAGES: ${{ inputs.package-install    }}
       run: |
         dagger call -m "${{ github.action_path }}/.dagger" \
           --src="$GITHUB_WORKSPACE" \
           --image="$IMAGE" \
+          --packages="$PACKAGES" \
           render-diff --base-ref="$BASE_REF" --head-ref="$HEAD_REF" \
           export --path="$RUNNER_TEMP/out"
 

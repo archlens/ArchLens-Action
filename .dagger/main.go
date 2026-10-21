@@ -93,18 +93,24 @@ func firstViewName(raw []byte) (string, error) {
 
 // Builds a Go docker container to be used by other dagger functions to run on
 // Installs the required ast-parser as well
-func (m *ArchLensAction) Container(image string) *dagger.Container {
-	return dag.Container().
+func (m *ArchLensAction) Container(image, packages string) *dagger.Container {
+	container := dag.Container().
 		From(image).
 		WithDirectory("/proj", m.Src).
 		WithWorkdir("/proj").
 		WithExec([]string{"sh", "-c",
 			"curl -fsSL https://github.com/archlens/ArchLensGo/releases/latest/download/archlens-linux-amd64.tar.gz | tar -xz"}).
 		WithExec([]string{"git", "config", "--global", "--add", "safe.directory", "/proj"})
+
+	if packages != "" {
+		container.WithExec([]string{packages})
+	}
+
+	return container 
 	}
 
 
-func (m *ArchLensAction) RenderDiff(ctx context.Context, baseRef, headRef, image string) (*dagger.Directory, error) {
+func (m *ArchLensAction) RenderDiff(ctx context.Context, baseRef, headRef, image, packages string) (*dagger.Directory, error) {
 	raw, err := m.Src.File("archlens.json").Contents(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("archlens.json not found in the repository root: %w", err)
@@ -123,7 +129,7 @@ func (m *ArchLensAction) RenderDiff(ctx context.Context, baseRef, headRef, image
 		return nil, err
 	}
 
-	ctr := m.Container(image).
+	ctr := m.Container(image, packages).
 		WithExec([]string{"mkdir", "-p", diffCacheDir}).
 		WithExec([]string{"./archlens", "renderDiff", baseRef, headRef, "--markdown"})
 
