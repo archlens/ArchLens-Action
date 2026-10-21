@@ -69,9 +69,9 @@ runs:
       run: |
         dagger call -m "${{ github.action_path }}/.dagger" \
           --src="$GITHUB_WORKSPACE" \
+          render-diff --base-ref="$BASE_REF" --head-ref="$HEAD_REF" \
           --image="$IMAGE" \
           --packages="$PACKAGES" \
-          render-diff --base-ref="$BASE_REF" --head-ref="$HEAD_REF" \
           export --path="$RUNNER_TEMP/out"
 
         # Dagger ran in a container, so copy the updated caches back to the
