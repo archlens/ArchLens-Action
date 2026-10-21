@@ -91,16 +91,20 @@ func firstViewName(raw []byte) (string, error) {
 	return "", fmt.Errorf(`"views" not found in archlens.json`)
 }
 
-// Returns a container that echoes whatever string argument is provided
-func (m *ArchLensAction) Container() *dagger.Container {
+// Builds a Go docker container to be used by other dagger functions to run on
+// Installs the required ast-parser as well
+func (m *ArchLensAction) Container(language string) *dagger.Container {
 	return dag.Container().
-		From("golang:1.27-bookworm").
+		From("debian:bookworm-slim").
 		WithDirectory("/proj", m.Src).
 		WithWorkdir("/proj").
 		WithExec([]string{"sh", "-c",
 			"curl -fsSL https://github.com/archlens/ArchLensGo/releases/latest/download/archlens-linux-amd64.tar.gz | tar -xz"}).
+		WithExec([]string{"apt-get", "update", "&&", "apt-get", "install", "-y", "--no-install-recommends",  "git", "curl", "brew", "procps", "build-essential", "file"}).
+		WithExec([]string{"/bin/bash -c", "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"}).
+		WithExec([]string{"brew", "install", language}).
 		WithExec([]string{"git", "config", "--global", "--add", "safe.directory", "/proj"})
-	}
+}
 
 
 func (m *ArchLensAction) RenderDiff(ctx context.Context, baseRef, headRef string) (*dagger.Directory, error) {
