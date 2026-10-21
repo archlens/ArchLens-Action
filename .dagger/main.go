@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"strings"
 )
 
 type ArchLensAction struct {
@@ -100,7 +101,8 @@ func (m *ArchLensAction) Container(image, packages string) *dagger.Container {
 		WithWorkdir("/proj")
 
 	if packages != "" {
-		container = container.WithExec([]string{packages})
+		package_split := strings.Split(packages, " ")
+		container = container.WithExec(package_split)
 	}
 
 	container = container.WithExec([]string{"sh", "-c",
