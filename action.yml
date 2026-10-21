@@ -13,9 +13,9 @@ inputs:
   warm-cache:
     description: 'Only warm the parse cache (run this on pushes to your default branch). Nothing is posted.'
     default: 'false'
-  ast-language:
-    description: 'Sets the language of the ast-parser the project uses, this is installed using brew in the dagger workflow'
-    default: 'go'
+  ast-language-image:
+    description: 'Sets the language of the ast-parser the project uses, this is done using a docker image with the language needed installed'
+    default: 'golang:1.27-bookworm'
 
 runs:
   using: 'composite'
@@ -59,13 +59,13 @@ runs:
       if: inputs.warm-cache != 'true' || steps.cache.outputs.cache-hit != 'true'
       shell: bash
       env:
-        BASE_REF: ${{ steps.refs.outputs.base }}
-        HEAD_REF: ${{ steps.refs.outputs.head }}
-        LANGUAGE: ${{ inputs.ast-language     }}
+        BASE_REF: ${{ steps.refs.outputs.base   }}
+        HEAD_REF: ${{ steps.refs.outputs.head   }}
+        IMAGE: ${{ inputs.ast-language-image }}
       run: |
         dagger call -m "${{ github.action_path }}/.dagger" \
           --src="$GITHUB_WORKSPACE" \
-          --language="$LANGUAGE" \
+          --image="$IMAGE" \
           render-diff --base-ref="$BASE_REF" --head-ref="$HEAD_REF" \
           export --path="$RUNNER_TEMP/out"
 
