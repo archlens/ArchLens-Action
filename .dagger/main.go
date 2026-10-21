@@ -97,14 +97,15 @@ func (m *ArchLensAction) Container(image, packages string) *dagger.Container {
 	container := dag.Container().
 		From(image).
 		WithDirectory("/proj", m.Src).
-		WithWorkdir("/proj").
-		WithExec([]string{"sh", "-c",
-			"curl -fsSL https://github.com/archlens/ArchLensGo/releases/latest/download/archlens-linux-amd64.tar.gz | tar -xz"}).
-		WithExec([]string{"git", "config", "--global", "--add", "safe.directory", "/proj"})
+		WithWorkdir("/proj")
 
 	if packages != "" {
 		container.WithExec([]string{packages})
 	}
+
+	container.WithExec([]string{"sh", "-c",
+			"curl -fsSL https://github.com/archlens/ArchLensGo/releases/latest/download/archlens-linux-amd64.tar.gz | tar -xz"}).
+		WithExec([]string{"git", "config", "--global", "--add", "safe.directory", "/proj"})
 
 	return container 
 	}
