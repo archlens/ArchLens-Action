@@ -110,7 +110,7 @@ func (m *ArchLensAction) PythonContainer() *dagger.Container {
 // Installs the required ast-parser language as well
 func (m *ArchLensAction) GoContainer() *dagger.Container {
 	return dag.Container().
-		From("go:1.27-bookworm").
+		From("golang:1.27-bookworm").
 		WithDirectory("/proj", m.Src).
 		WithWorkdir("/proj").
 		WithExec([]string{"sh", "-c",
