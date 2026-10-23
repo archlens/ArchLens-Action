@@ -92,8 +92,49 @@ func firstViewName(raw []byte) (string, error) {
 	return "", fmt.Errorf(`"views" not found in archlens.json`)
 }
 
+
+// Builds a python docker container to be used by other dagger functions to run on
+// Installs the required ast-parser language as well
+func (m *ArchLensAction) PythonContainer() *dagger.Container {
+	return dag.Container().
+		From("python:3.14-bookworm").
+		WithDirectory("/proj", m.Src).
+		WithWorkdir("/proj").
+		WithExec([]string{"apt-get", "install", "git", "curl", "-y"}).
+		WithExec([]string{"sh", "-c",
+			"curl -fsSL https://github.com/archlens/ArchLensGo/releases/latest/download/archlens-linux-amd64.tar.gz | tar -xz"}).
+		WithExec([]string{"git", "config", "--global", "--add", "safe.directory", "/proj"})
+}
+
 // Builds a Go docker container to be used by other dagger functions to run on
-// Installs the required ast-parser as well
+// Installs the required ast-parser language as well
+func (m *ArchLensAction) GoContainer() *dagger.Container {
+	return dag.Container().
+		From("go:1.27-bookworm").
+		WithDirectory("/proj", m.Src).
+		WithWorkdir("/proj").
+		WithExec([]string{"sh", "-c",
+			"curl -fsSL https://github.com/archlens/ArchLensGo/releases/latest/download/archlens-linux-amd64.tar.gz | tar -xz"}).
+		WithExec([]string{"git", "config", "--global", "--add", "safe.directory", "/proj"})
+}
+
+// Builds a Java docker container to be used by other dagger functions to run on
+// Installs the required ast-parser language as well
+func (m *ArchLensAction) JavaContainer() *dagger.Container {
+	return dag.Container().
+		From("eclipse-temurin:8u504-b01-jdk-ubi10-minimal").
+		WithDirectory("/proj", m.Src).
+		WithWorkdir("/proj").
+		WithExec([]string{"microdnf", "install",  "-y", "git", "tar"}).
+		WithExec([]string{"microdnf", "clean", "all"}).
+		WithExec([]string{"sh", "-c",
+			"curl -fsSL https://github.com/archlens/ArchLensGo/releases/latest/download/archlens-linux-amd64.tar.gz | tar -xz"}).
+		WithExec([]string{"git", "config", "--global", "--add", "safe.directory", "/proj"})
+}
+
+
+// Builds a docker container to be used by other dagger functions to run on
+// Installs the required ast-parser as well based on the base image
 func (m *ArchLensAction) Container(image, packages string) *dagger.Container {
 	container := dag.Container().
 		From(image).
@@ -113,7 +154,17 @@ func (m *ArchLensAction) Container(image, packages string) *dagger.Container {
 	}
 
 
-func (m *ArchLensAction) RenderDiff(ctx context.Context, baseRef, headRef, image, packages string) (*dagger.Directory, error) {
+func (m *ArchLensAction) RenderDiff(
+	ctx context.Context,
+	baseRef string,
+	headRef string,
+	// +optional
+	preset string,
+	// +optional
+	image string,
+	// +optional
+	packages string,
+) (*dagger.Directory, error) {
 	raw, err := m.Src.File("archlens.json").Contents(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("archlens.json not found in the repository root: %w", err)
@@ -132,9 +183,27 @@ func (m *ArchLensAction) RenderDiff(ctx context.Context, baseRef, headRef, image
 		return nil, err
 	}
 
-	ctr := m.Container(image, packages).
+	var container *dagger.Container
+	preset = strings.ToLower(preset)
+	switch preset {
+	case "go":
+		container = m.GoContainer()
+	case "python":
+		container = m.PythonContainer()
+	case "java":
+		container = m.JavaContainer()
+	case "":
+		if image == "" {
+			return nil, fmt.Errorf("either preset or image must be provided")
+		}
+		container = m.Container(image, packages)
+	default:
+		return nil, fmt.Errorf("unknown preset %q (expected go, python, or java)", preset)
+	}
+	
+	ctr := container.
 		WithExec([]string{"mkdir", "-p", diffCacheDir}).
-		WithExec([]string{"./archlens", "renderDiff", baseRef, headRef, "--markdown"})
+		WithExec([]string{"./archlens", "render-diff", baseRef, headRef, "--markdown"})
 
 	outPath := path.Join("/proj", cfg.SaveLocation, viewName+"_diff.md")
 	return dag.Directory().

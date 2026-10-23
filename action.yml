@@ -19,7 +19,9 @@ inputs:
   package-install: 
     description: 'Installs extra missing packages to the image'
     default: ''
-
+  preset:
+    description: 'Select a preset ast-language container to use that is fully working. There is a container for all base supported ast-parsers in archlens (e.g. go, python, java)'
+    default: ''
 runs:
   using: 'composite'
   steps:
@@ -64,12 +66,14 @@ runs:
       env:
         BASE_REF: ${{ steps.refs.outputs.base   }}
         HEAD_REF: ${{ steps.refs.outputs.head   }}
-        IMAGE: ${{ inputs.ast-language-image    }}
+        IMAGE:    ${{ inputs.ast-language-image }}
         PACKAGES: ${{ inputs.package-install    }}
+        PRESET:   ${{ inputs.preset             }}
       run: |
         dagger call -m "${{ github.action_path }}/.dagger" \
           --src="$GITHUB_WORKSPACE" \
           render-diff --base-ref="$BASE_REF" --head-ref="$HEAD_REF" \
+          --preset="$PRESET"
           --image="$IMAGE" \
           --packages="$PACKAGES" \
           export --path="$RUNNER_TEMP/out"
