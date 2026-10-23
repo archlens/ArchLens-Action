@@ -15,7 +15,7 @@ inputs:
     default: 'false'
   ast-language-image:
     description: 'Sets the language of the ast-parser the project uses, this is done using a docker image with the language needed installed. The image needs git, curl and tar'
-    default: 'golang:1.27-bookworm'
+    default: ''
   package-install: 
     description: 'Installs extra missing packages to the image'
     default: ''
@@ -73,7 +73,7 @@ runs:
         dagger call -m "${{ github.action_path }}/.dagger" \
           --src="$GITHUB_WORKSPACE" \
           render-diff --base-ref="$BASE_REF" --head-ref="$HEAD_REF" \
-          --preset="$PRESET"
+          --preset="$PRESET" \
           --image="$IMAGE" \
           --packages="$PACKAGES" \
           export --path="$RUNNER_TEMP/out"
