@@ -22,6 +22,9 @@ inputs:
   preset:
     description: 'Select a preset ast-language container to use that is fully working. There is a container for all base supported ast-parsers in archlens (e.g. go, python, java)'
     default: ''
+  edit-in-place:
+    description: 'Update the existing ArchLens comment instead of posting a new one and deleting the old one'
+    default: 'false'
 runs:
   using: 'composite'
   steps:
@@ -96,7 +99,29 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.github-token }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
-      run: gh pr comment "$PR_NUMBER" --body-file "$RUNNER_TEMP/out/diff.md"
+        EDIT_IN_PLACE: ${{ inputs.edit-in-place }}
+      run: |
+        marker='<!-- archlens-diff -->'
+        { echo "$marker"; cat "$RUNNER_TEMP/out/diff.md"; } > "$RUNNER_TEMP/comment.md"
+        api="repos/$GITHUB_REPOSITORY"
+
+        # Every existing ArchLens comment on this PR, oldest first
+        ids=$(gh api --paginate "$api/issues/$PR_NUMBER/comments" \
+          | jq -r --arg m "$marker" '.[] | select(.body | contains($m)) | .id')
+
+        if [ "$EDIT_IN_PLACE" = "true" ] && [ -n "$ids" ]; then
+          # Edit mode: update the newest ArchLens comment
+          keep=$(printf '%s\n' "$ids" | tail -n1)
+          gh api -X PATCH "$api/issues/comments/$keep" -F body=@"$RUNNER_TEMP/comment.md" >/dev/null
+        else
+          # Default mode (or nothing to edit yet): post a new comment
+          keep=$(gh api -X POST "$api/issues/$PR_NUMBER/comments" -F body=@"$RUNNER_TEMP/comment.md" --jq .id)
+        fi
+
+        # Either way, only one ArchLens comment stays: remove every other one
+        for old in $ids; do
+          [ "$old" = "$keep" ] || gh api -X DELETE "$api/issues/comments/$old"
+        done
 
 branding:
   icon: 'activity'
