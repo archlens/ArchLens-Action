@@ -25,6 +25,9 @@ inputs:
   edit-in-place:
     description: 'Update the existing ArchLens comment instead of posting a new one and deleting the old one'
     default: 'false'
+  always-show-diff:
+    description: 'Post the full diagram even when nothing changed. By default a short "no architecturally significant changes" comment is posted instead.'
+    default: 'false'
 runs:
   using: 'composite'
   steps:
@@ -100,9 +103,20 @@ runs:
         GH_TOKEN: ${{ inputs.github-token }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         EDIT_IN_PLACE: ${{ inputs.edit-in-place }}
+        ALWAYS_SHOW_DIFF: ${{ inputs.always-show-diff }}
       run: |
         marker='<!-- archlens-diff -->'
-        { echo "$marker"; cat "$RUNNER_TEMP/out/diff.md"; } > "$RUNNER_TEMP/comment.md"
+        diff="$RUNNER_TEMP/out/diff.md"
+
+        # A link label with a non-zero change, e.g. "3 (+1)" or "0 (-2)", means something changed
+        if grep -Eq '\([+-]0*[1-9][0-9]*\)' "$diff"; then changed=true; else changed=false; fi
+
+        if [ "$changed" = "false" ] && [ "$ALWAYS_SHOW_DIFF" != "true" ]; then
+          printf '%s\n### ArchLens\nNo architecturally significant changes.\n' "$marker" > "$RUNNER_TEMP/comment.md"
+        else
+          { echo "$marker"; cat "$diff"; } > "$RUNNER_TEMP/comment.md"
+        fi
+
         api="repos/$GITHUB_REPOSITORY"
 
         # Every existing ArchLens comment on this PR, oldest first
@@ -110,11 +124,9 @@ runs:
           | jq -r --arg m "$marker" '.[] | select(.body | contains($m)) | .id')
 
         if [ "$EDIT_IN_PLACE" = "true" ] && [ -n "$ids" ]; then
-          # Edit mode: update the newest ArchLens comment
           keep=$(printf '%s\n' "$ids" | tail -n1)
           gh api -X PATCH "$api/issues/comments/$keep" -F body=@"$RUNNER_TEMP/comment.md" >/dev/null
         else
-          # Default mode (or nothing to edit yet): post a new comment
           keep=$(gh api -X POST "$api/issues/$PR_NUMBER/comments" -F body=@"$RUNNER_TEMP/comment.md" --jq .id)
         fi
 
