@@ -189,7 +189,7 @@ func (m *ArchLensAction) RenderDiff(
 	packages string,
 	configLocation string,
 ) (*dagger.Directory, error) {
-	cfgFile, err := configPaths(configLocation)
+	cfgFile, err := configPath(configLocation)
 	if err != nil {
 		return nil, err
 	}
