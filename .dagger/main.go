@@ -166,15 +166,15 @@ func (m *ArchLensAction) Container(image, packages string) *dagger.Container {
 	}
 
 
-func configPaths(location string) (file, dir string, err error) {
+func configPath(location string) (string, error) {
 	location = path.Clean(location) // "" becomes "."
 	if path.IsAbs(location) || location == ".." || strings.HasPrefix(location, "../") {
-		return "", "", fmt.Errorf("config-location %q must stay inside the repository", location)
+		return "", fmt.Errorf("config-location %q must stay inside the repository", location)
 	}
 	if strings.HasSuffix(location, ".json") {
-		return location, path.Dir(location), nil
+		return location, nil
 	}
-	return path.Join(location, "archlens.json"), location, nil
+	return path.Join(location, "archlens.json"), nil
 }
 
 func (m *ArchLensAction) RenderDiff(
@@ -189,7 +189,7 @@ func (m *ArchLensAction) RenderDiff(
 	packages string,
 	configLocation string,
 ) (*dagger.Directory, error) {
-	cfgFile, cfgDir, err := configPaths(configLocation) // NEW
+	cfgFile, err := configPaths(configLocation)
 	if err != nil {
 		return nil, err
 	}
