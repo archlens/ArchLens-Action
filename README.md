@@ -97,3 +97,40 @@ jobs:
           ast-language-image: "python:3.14-bookworm"
           package-install: "apt-get install git curl -y"
 ```
+
+## All possible input fields
+
+Below is the full list of input fields that are able to be set in the extension. Please note that the preset field will override the package-install and ast-language-image fields.
+
+```yaml
+  github-token:
+    description: 'GitHub token (needs pull-requests: write to comment)'
+    required: true
+  base-ref:
+    description: 'Base commit'
+    default: ${{ github.event.pull_request.base.sha }}
+  head-ref:
+    description: 'Head commit'
+    default: ${{ github.event.pull_request.head.sha }}
+  warm-cache:
+    description: 'Only warm the parse cache (run this on pushes to your default branch). Nothing is posted.'
+    default: 'false'
+  ast-language-image:
+    description: 'Sets the language of the ast-parser the project uses, this is done using a docker image with the language needed installed. The image needs git, curl and tar'
+    default: ''
+  package-install: 
+    description: 'Installs extra missing packages to the image'
+    default: ''
+  preset:
+    description: 'Select a preset ast-language container to use that is fully working. There is a container for all base supported ast-parsers in archlens (e.g. go, python, java, csharp)'
+    default: ''
+  edit-in-place:
+    description: 'Update the existing ArchLens comment instead of posting a new one and deleting the old one'
+    default: 'false'
+  always-show-diff:
+    description: 'Post the full diagram even when nothing changed. By default a short "no architecturally significant changes" comment is posted instead.'
+    default: 'false'
+  config-location: 
+    description: 'Relative path to the archlens.json config file from the root of the repository'
+    default: '.'
+```
