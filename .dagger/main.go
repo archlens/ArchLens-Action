@@ -234,7 +234,7 @@ func (m *ArchLensAction) RenderDiff(
 	
 	ctr := container.
 		WithExec([]string{"mkdir", "-p", diffCacheDir}).
-		WithExec([]string{"./archlens", "render-diff", "-c", cfgFile, baseRef, headRef, "--markdown"})
+		WithExec([]string{"./archlens", "render-diff", "-c", cfgFile, baseRef, headRef, "--format=mermaid-md"})
 
 	outPath := path.Join("/proj", cfg.SaveLocation, viewName+"_diff.md")
 	return dag.Directory().
