@@ -132,6 +132,18 @@ func (m *ArchLensAction) JavaContainer() *dagger.Container {
 		WithExec([]string{"git", "config", "--global", "--add", "safe.directory", "/proj"})
 }
 
+// Builds a C# docker container to be used by other dagger functions to run on
+// Installs the required ast-parser language as well
+func (m *ArchLensAction) CSharpContainer() *dagger.Container {
+	return dag.Container().
+		From("mcr.microsoft.com/dotnet/sdk:9.0").
+		WithDirectory("/proj", m.Src).
+		WithWorkdir("/proj").
+		WithExec([]string{"apt-get", "install", "tar", "-y"}).
+		WithExec([]string{"sh", "-c",
+			"curl -fsSL https://github.com/archlens/ArchLensGo/releases/latest/download/archlens-linux-amd64.tar.gz | tar -xz"}).
+		WithExec([]string{"git", "config", "--global", "--add", "safe.directory", "/proj"})
+}
 
 // Builds a docker container to be used by other dagger functions to run on
 // Installs the required ast-parser as well based on the base image
@@ -154,6 +166,17 @@ func (m *ArchLensAction) Container(image, packages string) *dagger.Container {
 	}
 
 
+func configPaths(location string) (file, dir string, err error) {
+	location = path.Clean(location) // "" becomes "."
+	if path.IsAbs(location) || location == ".." || strings.HasPrefix(location, "../") {
+		return "", "", fmt.Errorf("config-location %q must stay inside the repository", location)
+	}
+	if strings.HasSuffix(location, ".json") {
+		return location, path.Dir(location), nil
+	}
+	return path.Join(location, "archlens.json"), location, nil
+}
+
 func (m *ArchLensAction) RenderDiff(
 	ctx context.Context,
 	baseRef string,
@@ -164,8 +187,14 @@ func (m *ArchLensAction) RenderDiff(
 	image string,
 	// +optional
 	packages string,
+	configLocation string,
 ) (*dagger.Directory, error) {
-	raw, err := m.Src.File("archlens.json").Contents(ctx)
+	cfgFile, cfgDir, err := configPaths(configLocation) // NEW
+	if err != nil {
+		return nil, err
+	}
+
+	raw, err := m.Src.File(cfgFile).Contents(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("archlens.json not found in the repository root: %w", err)
 	}
@@ -192,6 +221,8 @@ func (m *ArchLensAction) RenderDiff(
 		container = m.PythonContainer()
 	case "java":
 		container = m.JavaContainer()
+	case "csharp":
+		container = m.CSharpContainer()
 	case "":
 		if image == "" {
 			return nil, fmt.Errorf("either preset or image must be provided")
@@ -203,7 +234,7 @@ func (m *ArchLensAction) RenderDiff(
 	
 	ctr := container.
 		WithExec([]string{"mkdir", "-p", diffCacheDir}).
-		WithExec([]string{"./archlens", "render-diff", baseRef, headRef, "--markdown"})
+		WithExec([]string{"./archlens", "render-diff", "-c", cfgFile, baseRef, headRef, "--markdown"})
 
 	outPath := path.Join("/proj", cfg.SaveLocation, viewName+"_diff.md")
 	return dag.Directory().
