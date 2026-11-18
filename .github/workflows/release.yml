@@ -30,11 +30,32 @@ jobs:
           test -f dagger.json
 
       - name: Install Dagger CLI
+        shell: bash
         run: |
-          # Use the same engine version the module declares, so CI matches what users get
-          version=$(jq -r '.engineVersion' dagger.json | sed 's/^v//')
-          curl -fsSL https://dl.dagger.io/dagger/install.sh | BIN_DIR=/usr/local/bin DAGGER_VERSION="$version" sh
+          set -euo pipefail
 
+          # Use the same engine version the module declares, so CI matches what users get
+          version="$(jq -er '.engineVersion' dagger.json | sed 's/^v//')"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Unexpected engineVersion: $version" >&2; exit 1; }
+
+          case "$(uname -m)" in
+            x86_64)  arch=amd64 ;;
+            aarch64) arch=arm64 ;;
+            *) echo "Unsupported arch: $(uname -m)" >&2; exit 1 ;;
+          esac
+
+          base="https://dl.dagger.io/dagger/releases/${version}"
+          tarball="dagger_v${version}_linux_${arch}.tar.gz"
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          curl --proto '=https' --tlsv1.2 -fsSL -o "${tmp}/${tarball}" "${base}/${tarball}"
+          curl --proto '=https' --tlsv1.2 -fsSL -o "${tmp}/checksums.txt" "${base}/checksums.txt"
+
+          (cd "$tmp" && grep " ${tarball}\$" checksums.txt | sha256sum -c -)
+
+          sudo tar -xzf "${tmp}/${tarball}" -C /usr/local/bin dagger
+          dagger version
       - name: Dagger module loads
         run: dagger functions -m .dagger
 
@@ -46,7 +67,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Auto Changelog
-        uses: ardalanamini/auto-changelog@v4.0.1
+        uses: ardalanamini/auto-changelog@506d604cdb8ec964c260a43c4e2f594ba30bfecc
         id  : changelog
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
